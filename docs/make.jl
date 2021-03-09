@@ -1,16 +1,16 @@
-using MiniLogger
+using MiniLoggers
 using Documenter
 
-DocMeta.setdocmeta!(MiniLogger, :DocTestSetup, :(using MiniLogger); recursive=true)
+DocMeta.setdocmeta!(MiniLoggers, :DocTestSetup, :(using MiniLoggers); recursive=true)
 
 makedocs(;
-    modules=[MiniLogger],
+    modules=[MiniLoggers],
     authors="Andrey Oskin",
     repo="https://github.com/Arkoniak/MiniLogger.jl/blob/{commit}{path}#{line}",
-    sitename="MiniLogger.jl",
+    sitename="MiniLoggers.jl",
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", "false") == "true",
-        canonical="https://Arkoniak.github.io/MiniLogger.jl",
+        canonical="https://Arkoniak.github.io/MiniLoggers.jl",
         assets=String[],
     ),
     pages=[
@@ -19,5 +19,5 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/Arkoniak/MiniLogger.jl",
+    repo="github.com/Arkoniak/MiniLoggers.jl",
 )

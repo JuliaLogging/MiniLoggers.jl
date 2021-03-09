@@ -1,12 +1,12 @@
 ```@meta
-CurrentModule = MiniLogger
+CurrentModule = MiniLoggers
 ```
 
-# MiniLogger
+# MiniLoggers
 
 ```@index
 ```
 
 ```@autodocs
-Modules = [MiniLogger]
+Modules = [MiniLoggers]
 ```

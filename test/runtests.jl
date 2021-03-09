@@ -1,6 +1,6 @@
-using MiniLogger
+using MiniLoggers
 using Test
 
-@testset "MiniLogger.jl" begin
+@testset "MiniLoggers.jl" begin
     # Write your tests here.
 end

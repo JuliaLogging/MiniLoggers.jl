@@ -55,9 +55,9 @@ jobs:
       - run: |
           julia --project=docs -e '
             using Documenter: DocMeta, doctest
-            using MiniLogger
-            DocMeta.setdocmeta!(MiniLogger, :DocTestSetup, :(using MiniLogger); recursive=true)
-            doctest(MiniLogger)'
+            using MiniLoggers
+            DocMeta.setdocmeta!(MiniLoggers, :DocTestSetup, :(using MiniLoggers); recursive=true)
+            doctest(MiniLoggers)'
       - run: julia --project=docs docs/make.jl
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
