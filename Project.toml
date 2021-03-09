@@ -1,13 +1,16 @@
-name = "MiniLogger"
+name = "MiniLoggers"
 uuid = "93f3dd0f-005d-4452-894a-a31841fa4078"
 authors = ["Andrey Oskin"]
 version = "0.1.0"
 
-[extras]
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+[deps]
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
 [compat]
 julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
 test = ["Test"]
