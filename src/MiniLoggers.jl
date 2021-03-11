@@ -10,11 +10,12 @@ struct MiniLogger <: AbstractLogger
     stream::IO
     minlevel::LogLevel
     message_limits::Dict{Any,Int}
+    flush::Bool
 end
 
-MiniLogger(stream::IO, level) = MiniLogger(stream, level, Dict())
-MiniLogger(; stream::IO = stdout, level=Info) = MiniLogger(stream, level, Dict())
-MiniLogger(stream::IO; level=Info) = MiniLogger(stream, level, Dict())
+MiniLogger(stream::IO, level) = MiniLogger(stream, level, Dict(), true)
+MiniLogger(; stream::IO = stdout, level = Info, flush = true) = MiniLogger(stream, level, Dict(), flush)
+MiniLogger(stream::IO; level = Info, flush = true) = MiniLogger(stream, level, Dict(), flush)
 
 shouldlog(logger::MiniLogger, level, _module, group, id) =
     get(logger.message_limits, id, 1) > 0
@@ -69,6 +70,9 @@ function handle_message(logger::MiniLogger, level, message, _module, group, id,
     # println(iob, "└ @ ", something(_module, "nothing"), " ",
     #         something(filepath, "nothing"), ":", something(line, "nothing"))
     write(logger.stream, take!(buf))
+    if logger.flush
+        flush(logger.stream)
+    end
     nothing
 end
 
