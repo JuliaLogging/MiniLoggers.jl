@@ -2,9 +2,9 @@ module MiniLoggers
 
 using Dates
 import Logging: AbstractLogger, shouldlog, min_enabled_level, catch_exceptions, handle_message, LogLevel
-import Logging: Warn, Info
+using Logging: Warn, Info, Debug, Error, BelowMinLevel, AboveMaxLevel, global_logger, with_logger
 
-export MiniLogger
+export MiniLogger, global_logger, with_logger
 
 struct MiniLogger <: AbstractLogger
     stream::IO
@@ -24,6 +24,26 @@ min_enabled_level(logger::MiniLogger) = logger.minlevel
 
 catch_exceptions(logger::MiniLogger) = true
 
+# Formatting of values in key value pairs
+showvalue(io, msg) = show(io, "text/plain", msg)
+function showvalue(io, e::Tuple{Exception,Any})
+    ex, bt = e
+    Base.showerror(io, ex, bt; backtrace = bt!==nothing)
+end
+showvalue(io, ex::Exception) = Base.showerror(io, ex)
+showvalue(io, ex::AbstractVector{Union{Ptr{Nothing}, Base.InterpreterIP}}) = Base.show_backtrace(io, ex)
+
+function showmessage(io, msg)
+    msglines = split(chomp(string(msg)), '\n')
+    print(io, msglines[1])
+    for i in 2:length(msglines)
+        print(io, " ", msglines[i])
+    end
+end
+showmessage(io, e::Tuple{Exception,Any}) = showvalue(io, e)
+showmessage(io, ex::Exception) = showvalue(io, e)
+showmessage(io, ex::AbstractVector{Union{Ptr{Nothing}, Base.InterpreterIP}}) = Base.show_backtrace(io, ex)
+
 function handle_message(logger::MiniLogger, level, message, _module, group, id,
                         filepath, line; maxlog=nothing, kwargs...)
     if maxlog !== nothing && maxlog isa Integer
@@ -36,21 +56,10 @@ function handle_message(logger::MiniLogger, level, message, _module, group, id,
     iob = IOContext(buf, logger.stream)
 
     levelstr = level == Warn ? "Warning" : string(level)
-    print(iob, "[", Dates.format(Dates.now(), "yyyy-mm-dd HH:MM:SS"), "] - ", levelstr, " - ")
+    print(iob, "[", Dates.format(Dates.now(), Dates.dateformat"yyyy-mm-dd HH:MM:SS"), "] ", _module, ":", basename(filepath), ":", line, " ", levelstr, ": ")
 
-    msglines = split(chomp(string(message)), '\n')
-    print(iob, msglines[1])
-    for i in 2:length(msglines)
-        print(iob, " ", msglines[i])
-    end
+    showmessage(iob, message)
 
-    # println(iob, "┌ ", levelstr, ": ", msglines[1])
-    # for i in 2:length(msglines)
-    #     println(iob, "│ ", msglines[i])
-    # end
-    # if !isempty(kwargs)
-    #     print(iob, " {")
-    # end
     iscomma = false
     for (key, val) in kwargs
         # print(iob, val)
@@ -59,13 +68,11 @@ function handle_message(logger::MiniLogger, level, message, _module, group, id,
             iscomma = false
         else
             iscomma && print(iob, ", ")
-            print(iob, key, " = ", val)
+            print(iob, key, " = ")
+            showvalue(iob, val)
             iscomma = true
         end
     end
-    # if !isempty(kwargs)
-    #     print(iob, "}")
-    # end
     print(iob, "\n")
     # println(iob, "└ @ ", something(_module, "nothing"), " ",
     #         something(filepath, "nothing"), ":", something(line, "nothing"))
