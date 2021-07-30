@@ -1,6 +1,10 @@
-using MiniLoggers
-using Test
+module MiniLoggersTest
 
-@testset "MiniLoggers.jl" begin
-    # Write your tests here.
-end
+using ReTest
+
+include("test01_tokenizer.jl")
+include("test02_loggerformat.jl")
+
+end # module
+
+MiniLoggersTest.runtests()
