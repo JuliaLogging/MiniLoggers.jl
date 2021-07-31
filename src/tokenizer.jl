@@ -27,7 +27,7 @@ function colorparse(s)
                 else
                     intcode = tryparse(Int, cs)
                     code = intcode === nothing ? Symbol(cs) : intcode
-                    if haskey(Base.text_colors, code)
+                    if haskey(Base.text_colors, code) || code == :func
                         col = Color(code, col.isbold)
                         modifiers += 1
                         i1 = prevind(s, i)
@@ -100,7 +100,7 @@ function tokenize!(out, s, level = 1, i0 = 1)
         if c == '{'
             addtoken!(out, s, i0, i1)
             i = tokenize!(out, s, level + 1, nextind(s, i))
-            i1 = i
+            i1 = prevind(s, i)
             i0 = i
             continue
         elseif c == '}'

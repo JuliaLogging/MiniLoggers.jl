@@ -93,6 +93,10 @@ end
             Token("hello", Color(:green, true)),
             Token(" world:", Color(-1, false))]
     @test comptokens(res1, res2)
+
+    res1 = tokenize("{hello}{world}")
+    res2 = [Token("hello"), Token("world")]
+    @test comptokens(res1, res2)
 end
 
 end # module

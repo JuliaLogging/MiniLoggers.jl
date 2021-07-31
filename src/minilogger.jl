@@ -1,4 +1,4 @@
-struct MiniLogger{IOT1 <: IO, IOT2 <: IO} <: AbstractLogger
+struct MiniLogger{IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat} <: AbstractLogger
     io::IOT1
     ioerr::IOT2
     errlevel::LogLevel
@@ -6,9 +6,17 @@ struct MiniLogger{IOT1 <: IO, IOT2 <: IO} <: AbstractLogger
     message_limits::Dict{Any,Int}
     flush::Bool
     format::Vector{Token}
+    dtformat::DFT
 end
 
-MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, message_limits = Dict{Any, Int}(), flush = true, format = "{message}") = MiniLogger(io, ioerr, errlevel, minlevel, message_limits, flush, tokenize(format))
+getio(io) = io
+getio(io::AbstractString) = open(io)
+
+function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, message_limits = Dict{Any, Int}(), flush = true, format = "{[{datetime}]:func} {message}", dtformat = dateformat"yyyy-mm-dd HH:MM:SS")
+    tio = getio(io)
+    tioerr = io == ioerr ? tio : getio(ioerr)
+    MiniLogger(tio, tioerr, errlevel, minlevel, message_limits, flush, tokenize(format), dtformat)
+end
 
 shouldlog(logger::MiniLogger, level, _module, group, id) =
     get(logger.message_limits, id, 1) > 0
@@ -39,6 +47,34 @@ showmessage(io, ex::AbstractVector{Union{Ptr{Nothing}, Base.InterpreterIP}}) = B
 
 tsnow(dtf) = Dates.format(Dates.now(), dtf)
 
+function colorfunc(level::LogLevel, _module, group, id, filepath, line, element)
+    level < Info  ? Color(Base.debug_color()) :
+    level < Warn  ? Color(Base.info_color())  :
+    level < Error ? Color(Base.warn_color())  :
+                    Color(Base.error_color())
+end
+
+function extractcolor(token::Token, level, _module, group, id, filepath, line)
+    if token.c.c == :func
+        color = colorfunc(level, _module, group, id, filepath, line, token.val)
+        return Color(color.c, color.isbold || token.c.isbold)
+    else
+        return token.c
+    end
+end
+
+function printwcolor(iob, val, color)
+    if color.c == -1
+        if color.isbold
+            printstyled(iob, val; bold = color.isbold)
+        else
+            print(iob, val)
+        end
+    else
+        printstyled(iob, val; color = color.c, bold = color.isbold)
+    end
+end
+
 function handle_message(logger::MiniLogger, level, message, _module, group, id,
                         filepath, line; maxlog=nothing, kwargs...)
     if maxlog !== nothing && maxlog isa Integer
@@ -47,17 +83,20 @@ function handle_message(logger::MiniLogger, level, message, _module, group, id,
         remaining > 0 || return
     end
 
-    io = level < logger.errlevel ? logger.io : logger.ioerr
+    io = if level < logger.errlevel
+            isopen(logger.io) ? logger.io : stdout
+        else
+            isopen(logger.ioerr) ? logger.ioerr : stderr
+        end
 
     buf = IOBuffer()
     iob = IOContext(buf, io)
 
     for token in logger.format
+        c = extractcolor(token, level, _module, group, id, filepath, line)
         val = token.val
         if val == "datetime"
-            print(iob, tsnow(Dates.dateformat"yyyy-mm-dd HH:MM:SS"))
-        elseif val == "date"
-            print(iob, tsnow(Dates.dateformat"yyyy-mm-dd"))
+            printwcolor(iob, tsnow(logger.dtformat), c)
         elseif val == "message"
             showmessage(iob, message)
 
@@ -75,21 +114,21 @@ function handle_message(logger::MiniLogger, level, message, _module, group, id,
             end
         elseif val == "level"
             levelstr = string(level)
-            print(iob, levelstr)
+            printwcolor(iob, levelstr, c)
         elseif val == "basename"
-            print(iob, basename(filepath))
+            printwcolor(iob, basename(filepath), c)
         elseif val == "filepath"
-            print(iob, filepath)
+            printwcolor(iob, filepath, c)
         elseif val == "line"
-            print(iob, line)
+            printwcolor(iob, line, c)
         elseif val == "group"
-            print(iob, group)
+            printwcolor(iob, group, c)
         elseif val == "module"
-            print(iob, _module)
+            printwcolor(iob, _module, c)
         elseif val == "id"
-            print(iob, id)
+            printwcolor(iob, id, c)
         else
-            print(iob, val)
+            printwcolor(iob, val, c)
         end
     end
     print(iob, "\n")
