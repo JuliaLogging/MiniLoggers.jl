@@ -3,6 +3,8 @@ module LoggerFormatTest
 using MiniLoggers
 using ReTest
 
+conts(s, sub) = match(Regex(sub), s) !== nothing
+
 @testset "basic format" begin
     io = IOBuffer()
     logger = MiniLogger(io = io, minlevel = MiniLoggers.Debug,
@@ -10,17 +12,17 @@ using ReTest
     with_logger(logger) do
         @info "foo"
         s = String(take!(io))
-        @test !contains(s, "datetime")
-        @test !contains(s, "level")
-        @test !contains(s, "module")
-        @test !contains(s, "basename")
-        @test !contains(s, "filepath")
-        @test !contains(s, "line")
-        @test !contains(s, "group")
-        @test !contains(s, "module")
-        @test !contains(s, "id")
-        @test contains(s, "foo")
-        @test contains(s, "Info")
+        @test !conts(s, "datetime")
+        @test !conts(s, "level")
+        @test !conts(s, "module")
+        @test !conts(s, "basename")
+        @test !conts(s, "filepath")
+        @test !conts(s, "line")
+        @test !conts(s, "group")
+        @test !conts(s, "module")
+        @test !conts(s, "id")
+        @test conts(s, "foo")
+        @test conts(s, "Info")
     end
 end
 
