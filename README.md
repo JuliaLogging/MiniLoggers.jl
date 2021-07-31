@@ -1,18 +1,86 @@
 # MiniLogger
 
-[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://Arkoniak.github.io/MiniLoggers.jl/stable)
-[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://Arkoniak.github.io/MiniLoggers.jl/dev)
-[![Build Status](https://github.com/Arkoniak/MiniLoggers.jl/workflows/CI/badge.svg)](https://github.com/Arkoniak/MiniLoggers.jl/actions)
-[![Coverage](https://codecov.io/gh/Arkoniak/MiniLoggers.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/Arkoniak/MiniLoggers.jl)
+|                                                                                                    **Documentation**                                                                                                    |                                                                                                                              **Build Status**                                                                                                                              |                                                                                                              **JuliaHub**                                                                                                              |
+|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+| [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://Arkoniak.github.io/MiniLoggers.jl/stable)[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://Arkoniak.github.io/MiniLoggers.jl/dev) | [![Build](https://github.com/Arkoniak/MiniLoggers.jl/workflows/CI/badge.svg)](https://github.com/Arkoniak/MiniLoggers.jl/actions)[![Coverage](https://codecov.io/gh/Arkoniak/MiniLoggers.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/Arkoniak/MiniLoggers.jl) | [![pkgeval](https://juliahub.com/docs/MiniLoggers/pkgeval.svg)](https://juliahub.com/ui/Packages/MiniLoggers/5ppWi)[![version](https://juliahub.com/docs/MiniLoggers/version.svg)](https://juliahub.com/ui/Packages/MiniLoggers/5ppWi) |
+
+`MiniLoggers.jl` provides Julia logger with minimal setup and simple yet powerful format of logging strings. It allows to build custom and compact logging, which supports coloring, output to external files, timestamps and many more.
 
 # Installation
 
-Currently `MiniLoggers.jl` are not part of General registry, so it should be installed with
+`MiniLoggers.jl` is a part of General registry, so it should be installed with
 
 ```julia
-julia> Pkg.dev("https://github.com/Arkoniak/MiniLoggers.jl.git")
+julia> using Pkg; Pkg.add("MiniLoggers")
 ```
 
-# Usage
+# Examples of usage
 
-`MiniLoggers.jl` are build around the idea of extremely simple and visually compact logger, with output format defined by string in the same manner as in [python logging module](https://docs.python.org/3/howto/logging.html#changing-the-format-of-displayed-messages). It uses `stdout` by default and intended to be use instead of the usual `print` commands.
+In it's most simple form, `MiniLoggers.jl` is used as
+```julia
+using MiniLoggers
+
+MiniLogger(minlevel = MiniLogger.Debug) |> global_logger
+
+x = 1
+y = "asd"
+
+@debug "Values: " x y
+@info "Values: " x y
+@warn "Values: " x y
+@error "Values: " x y
+```
+
+and produces 
+
+![default_fmt](images/default_fmt.png)
+
+But one can make it more colourful and add more details with initilization like the following
+
+```julia
+MiniLogger(minlevel = MiniLoggers.Debug, 
+           format = "{[{datetime}] - {level} - :func}{{module}@{basename}:{line:cyan}:light_green}: {message}") |> global_logger
+
+@debug "Values: " x y
+@info "Values: " x y
+@warn "Values: " x y
+@error "Values: " x y
+```
+
+which yields
+
+![colour1_fmt](images/colour1_fmt.png)
+
+Or, with a simple change of one symbol, you can get fancy two-line logging format
+
+```julia
+MiniLogger(minlevel = MiniLoggers.Debug, 
+           format = "{[{datetime}] - {level} - :func}{{module}@{basename}:{line:cyan}:light_green}\n  {message}") |> global_logger
+```
+
+![colour2_fmt](images/colour2_fmt.png)
+
+Format constructor is very flexible, so the output of log messages is mostly limited by your imagination.
+
+At the same time, you can go other way arround and remove all extra details completely turning it effectively to a basic `println` command, thus making it convinient to plug minilogger in packages like [LoggingExtras.jl](https://github.com/JuliaLogging/LoggingExtras.jl)
+
+```julia
+MiniLogger(minlevel = MiniLoggers.Debug, format = "{message}") |> global_logger
+```
+
+![minimal_fmt](images/minimal_fmt.png)
+
+Also `MiniLoggers.jl` support Julia exceptions, so you can generate error messages in a usual way
+
+```julia
+MiniLogger(minlevel = MiniLoggers.Debug, 
+           format = "{[{datetime}] {level}:func} {module}@{basename}:{line:cyan}: {message}") |> global_logger
+
+try
+    error("Some error")
+catch err
+    @error (err, catch_backtrace())
+end
+```
+
+![error_fmt](images/error_fmt.png)
