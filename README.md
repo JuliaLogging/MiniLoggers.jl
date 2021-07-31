@@ -51,14 +51,14 @@ which yields
 
 ![colour1_fmt](images/colour1_fmt.png)
 
-Or, with a simple change of one symbol, you can get fancy two-line logging format
+Or, we can add small unicode magic and get fancy two-line logging format
 
 ```julia
 MiniLogger(minlevel = MiniLoggers.Debug, 
-           format = "{[{datetime}] - {level} - :func}{{module}@{basename}:{line:cyan}:light_green}\n  {message}") |> global_logger
+           format = "╭{[{datetime}] - {level} - :func}{{module}@{basename}:{line:cyan}:light_green}\n╰→ {message}") |> global_logger
 ```
 
-![colour2_fmt](images/colour2_fmt.png)
+![colour3_fmt](images/colour3_fmt.png)
 
 Format constructor is very flexible, so the output of log messages is mostly limited by your imagination.
 
