@@ -7,15 +7,16 @@ struct MiniLogger{IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat} <: AbstractLogger
     flush::Bool
     format::Vector{Token}
     dtformat::DFT
+    squash_message::Bool
 end
 
 getio(io) = io
 getio(io::AbstractString) = open(io)
 
-function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, message_limits = Dict{Any, Int}(), flush = true, format = "{[{datetime}]:func} {message}", dtformat = dateformat"yyyy-mm-dd HH:MM:SS")
+function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, message_limits = Dict{Any, Int}(), flush = true, format = "{[{datetime}]:func} {message}", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", squash_message = true)
     tio = getio(io)
     tioerr = io == ioerr ? tio : getio(ioerr)
-    MiniLogger(tio, tioerr, errlevel, minlevel, message_limits, flush, tokenize(format), dtformat)
+    MiniLogger(tio, tioerr, errlevel, minlevel, message_limits, flush, tokenize(format), dtformat, squash_message)
 end
 
 shouldlog(logger::MiniLogger, level, _module, group, id) =
@@ -34,16 +35,20 @@ end
 showvalue(io, ex::Exception) = Base.showerror(io, ex)
 showvalue(io, ex::AbstractVector{Union{Ptr{Nothing}, Base.InterpreterIP}}) = Base.show_backtrace(io, ex)
 
-function showmessage(io, msg)
-    msglines = split(chomp(string(msg)), '\n')
-    print(io, msglines[1])
-    for i in 2:length(msglines)
-        print(io, " ", msglines[i])
+function showmessage(io, msg, squash)
+    if squash
+        msglines = split(chomp(string(msg)), '\n')
+        print(io, strip(msglines[1]))
+        for i in 2:length(msglines)
+            print(io, " ", strip(msglines[i]))
+        end
+    else
+        print(io, msg)
     end
 end
-showmessage(io, e::Tuple{Exception,Any}) = showvalue(io, e)
-showmessage(io, ex::Exception) = showvalue(io, e)
-showmessage(io, ex::AbstractVector{Union{Ptr{Nothing}, Base.InterpreterIP}}) = Base.show_backtrace(io, ex)
+showmessage(io, e::Tuple{Exception,Any}, squash) = showvalue(io, e)
+showmessage(io, ex::Exception, squash) = showvalue(io, e)
+showmessage(io, ex::AbstractVector{Union{Ptr{Nothing}, Base.InterpreterIP}}, squash) = Base.show_backtrace(io, ex)
 
 tsnow(dtf) = Dates.format(Dates.now(), dtf)
 
@@ -98,7 +103,7 @@ function handle_message(logger::MiniLogger, level, message, _module, group, id,
         if val == "datetime"
             printwcolor(iob, tsnow(logger.dtformat), c)
         elseif val == "message"
-            showmessage(iob, message)
+            showmessage(iob, message, logger.squash_message)
 
             iscomma = false
             for (key, val) in kwargs
