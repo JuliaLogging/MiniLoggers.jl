@@ -38,9 +38,9 @@ showvalue(io, ex::AbstractVector{Union{Ptr{Nothing}, Base.InterpreterIP}}) = Bas
 function showmessage(io, msg, squash)
     if squash
         msglines = split(chomp(string(msg)), '\n')
-        print(io, strip(msglines[1]))
+        print(io, replace(msglines[1], "\r" => ""))
         for i in 2:length(msglines)
-            print(io, " ", strip(msglines[i]))
+            print(io, " ", replace(msglines[i], "\r" => ""))
         end
     else
         print(io, msg)

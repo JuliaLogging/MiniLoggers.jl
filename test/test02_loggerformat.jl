@@ -56,4 +56,71 @@ end
     end
 end
 
+@testset "kwargs" begin
+    io = IOBuffer()
+    logger = MiniLogger(io = io, format = "{message}")
+    x = 1
+    y = "asd"
+
+    with_logger(logger) do
+        @info "values: " x y
+    
+        s = String(take!(io))
+        @test s == "values: x = 1, y = \"asd\"\n"
+    end
+end
+
+@testset "error catching" begin
+    io = IOBuffer()
+    logger = MiniLogger(ioerr = io, format = "{message}")
+    
+    with_logger(logger) do
+        try
+            error("ERROR")
+        catch err
+            @error (err, catch_backtrace())
+        end
+
+        s = String(take!(io))
+        @test conts(s, "^ERROR\n *Stacktrace")
+
+        try
+            error("ERROR")
+        catch err
+            @error "foo " exception = (err, catch_backtrace())
+        end
+
+        s = String(take!(io))
+        @test conts(s, "^foo exception = ERROR\n *Stacktrace")
+    end
+end
+
+@testset "logstring colors" begin
+    io = IOBuffer()
+    ioc = IOContext(io, :color => true)
+    logger = MiniLogger(io = ioc, ioerr = ioc, format = "{foo:cyan} {bar:bold} {level:func}:{message}", minlevel = MiniLoggers.Debug)
+
+    with_logger(logger) do
+        @debug "foo"
+        s = String(take!(io))
+
+        @test s == "\e[36mfoo\e[39m \e[0m\e[1mbar\e[22m \e[34mDebug\e[39m:foo\n"
+
+        @info "foo"
+        s = String(take!(io))
+
+        @test s == "\e[36mfoo\e[39m \e[0m\e[1mbar\e[22m \e[36mInfo\e[39m:foo\n"
+
+        @warn "foo"
+        s = String(take!(io))
+
+        @test s == "\e[36mfoo\e[39m \e[0m\e[1mbar\e[22m \e[33mWarn\e[39m:foo\n"
+
+        @error "foo"
+        s = String(take!(io))
+
+        @test s == "\e[36mfoo\e[39m \e[0m\e[1mbar\e[22m \e[91mError\e[39m:foo\n"
+    end
+end
+
 end # module
