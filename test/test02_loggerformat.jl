@@ -26,4 +26,34 @@ conts(s, sub) = match(Regex(sub), s) !== nothing
     end
 end
 
+@testset "squashing" begin
+    io = IOBuffer()
+    logger = MiniLogger(io = io, format = "{message}")
+    with_logger(logger) do
+        @info "foo\nbar"
+
+        s = String(take!(io))
+        @test s == "foo bar\n"
+    end
+
+    logger = MiniLogger(io = io, format = "{message}", squash_message = false)
+    with_logger(logger) do
+        @info "foo\nbar"
+
+        s = String(take!(io))
+        @test s == "foo\nbar\n"
+    end
+end
+
+@testset "badcaret" begin
+    io = IOBuffer()
+    logger = MiniLogger(io = io, format = "{message}")
+    with_logger(logger) do
+        @info "foo\r\nbar"
+        
+        s = String(take!(io))
+        @test s == "foo bar\n"
+    end
+end
+
 end # module
