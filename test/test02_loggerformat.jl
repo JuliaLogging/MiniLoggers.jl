@@ -82,7 +82,7 @@ end
         end
 
         s = String(take!(io))
-        @test startswith(s, r"ERROR\n *Stacktrace")
+        @test conts(s, "^ERROR\n *Stacktrace")
 
         try
             error("ERROR")
@@ -91,7 +91,7 @@ end
         end
 
         s = String(take!(io))
-        @test startswith(s, r"foo exception = ERROR\n *Stacktrace")
+        @test conts(s, "^foo exception = ERROR\n *Stacktrace")
     end
 end
 
