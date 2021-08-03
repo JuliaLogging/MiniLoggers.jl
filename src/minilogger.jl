@@ -8,15 +8,53 @@ struct MiniLogger{IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat} <: AbstractLogger
     format::Vector{Token}
     dtformat::DFT
     squash_message::Bool
+    flush_threshold::Int
+    lastflush::Base.RefValue{Int}
 end
 
 getio(io) = io
 getio(io::AbstractString) = open(io)
 
-function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, message_limits = Dict{Any, Int}(), flush = true, format = "{[{datetime}]:func} {message}", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", squash_message = true)
+getflushthreshold(x::Integer) = x
+getflushthreshold(x::TimePeriod) = Dates.value(Millisecond(x))
+
+"""
+    MiniLogger(; <keyword arguments>)
+
+MiniLogger constructor creates custom logger which can be used with usual `@info`, `@debug` commands.
+
+Supported keyword arguments include:
+
+* `io` (default `stdout`): IO stream which is used to output log messages below `errlevel` level. Can be either `IO` or `String`, in the latter case it is treated as a name of the output file.
+* `ioerr` (default `stderr`): IO stream which is used to output log messages above `errlevel` level. Can be either `IO` or `String`, in the latter case it is treated as a name of the output file.
+* `errlevel` (default `Error`): determines which output IO to use for log messages. If you want for all messages to go to `io`, set this parameter to `MiniLoggers.AboveMaxLevel`. If you want for all messages to go to `ioerr`, set this parameter to `MiniLoggers.BelowMinLevel`.
+* `minlevel` (default: `Info`): messages below this level are ignored. For example with default setting `@debug "foo"` is ignored.
+* `squash_message` (default: `true`): if `squash_message` is set to `true`, then message is squashed to a single line, i.e. all `\\n` are changed to ` ` and `\\r` are removed.
+* `flush` (default: `true`): whether to `flush` IO stream for each log message. Flush behaviour also affected by `flush_threshold` argument.
+* `flush_threshold::Union{Integer, TimePeriod}` (default: 0): if this argument is nonzero and `flush` is `true`, then `io` is flushed only once per `flush_threshold` milliseconds. I.e. if time between two consecutive log messages is less then `flush_threshold`, then second message is not flushed and will have to wait for the next log event.
+* `dtformat` (default: "yyyy-mm-dd HH:MM:SS"): if `datetime` parameter is used in `format` argument, this dateformat is applied for output timestamps.
+* `format` (default: "{[{datetime}]:func} {message}"): format for output log message. It accepts following keywords, which should be provided in curly brackets:
+    * `datetime`: timestamp of the log message
+    * `level`: name of log level (Debug, Info, etc)
+    * `filepath`: filepath of the file, which produced log message
+    * `basename`: basename of the filepath of the file, which produced log message
+    * `line`: line number of the log command in the file, which produced log message
+    * `group`: log group 
+    * `module`: name of the module, which contains log command
+    * `id`: log message id
+    * `message`: message itself
+
+Each keyword accepts color information, which should be added after colon inside curly brackets. Colors can be either from `Base.text_colors` or special keyword `func`, in which case is used automated coloring. Additionaly, `bold` modifier is accepted by the `format` argument. For example: `{line:red}`, `{module:cyan:bold}`, `{group:func}` are all valid parts of the format command.
+
+Colour information is applied recursively without override, so `{line {module:cyan} group:red}` is equivalent to `{line:red} {module:cyan} {group:red}`.
+
+If part of the format is not a recognised keyword, then it is just used as is, for example `{foo:red}` means that output log message contain word "foo" printed in red.
+"""
+function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, message_limits = Dict{Any, Int}(), flush = true, format = "{[{datetime}]:func} {message}", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", squash_message = true, flush_threshold = 0)
     tio = getio(io)
     tioerr = io == ioerr ? tio : getio(ioerr)
-    MiniLogger(tio, tioerr, errlevel, minlevel, message_limits, flush, tokenize(format), dtformat, squash_message)
+    lastflush = Dates.value(Dates.now())
+    MiniLogger(tio, tioerr, errlevel, minlevel, message_limits, flush, tokenize(format), dtformat, squash_message, getflushthreshold(flush_threshold), Ref(lastflush))
 end
 
 shouldlog(logger::MiniLogger, level, _module, group, id) =
@@ -139,7 +177,15 @@ function handle_message(logger::MiniLogger, level, message, _module, group, id,
     print(iob, "\n")
     write(io, take!(buf))
     if logger.flush
-        flush(io)
+        if logger.flush_threshold <= 0
+            flush(io)
+        else
+            t = Dates.value(Dates.now())
+            if t - logger.lastflush[] >= logger.flush_threshold
+                logger.lastflush[] = t
+                flush(io)
+            end
+        end
     end
     nothing
 end
