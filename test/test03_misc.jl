@@ -55,13 +55,16 @@ end
 
 @testset "file logs" begin
     fpath = joinpath(@__DIR__, "logtest1.log")
-    logger = MiniLogger(io = fpath, format = "{message}")
+    logger = MiniLogger(io = fpath, ioerr = fpath, format = "{message}")
     with_logger(logger) do
         @info "Foo"
     end
     open(fpath, "r") do f
         @test read(f, String) == "Foo\n"
     end
+    close(logger)
+    @test isclosed(logger.io)
+    @test isclosed(logger.ioerr)
 
     logger = MiniLogger(io = fpath, format = "{message}", append = true)
     with_logger(logger) do
@@ -70,6 +73,7 @@ end
     open(fpath, "r") do f
         @test read(f, String) == "Foo\nBar\n"
     end
+    close(logger)
 
     logger = MiniLogger(io = fpath, format = "{message}")
     with_logger(logger) do
@@ -78,6 +82,7 @@ end
     open(fpath, "r") do f
         @test read(f, String) == "Baz\n"
     end
+    close(logger)
     try
         rm(fpath, force = true)
     catch err
