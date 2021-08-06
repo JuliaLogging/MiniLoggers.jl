@@ -12,8 +12,8 @@ struct MiniLogger{IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat} <: AbstractLogger
     lastflush::Base.RefValue{Int}
 end
 
-getio(io) = io
-getio(io::AbstractString) = open(io)
+getio(io, append) = io
+getio(io::AbstractString, append) = open(io, append ? "a" : "w")
 
 getflushthreshold(x::Integer) = x
 getflushthreshold(x::TimePeriod) = Dates.value(Millisecond(x))
@@ -29,6 +29,7 @@ Supported keyword arguments include:
 * `ioerr` (default `stderr`): IO stream which is used to output log messages above `errlevel` level. Can be either `IO` or `String`, in the latter case it is treated as a name of the output file.
 * `errlevel` (default `Error`): determines which output IO to use for log messages. If you want for all messages to go to `io`, set this parameter to `MiniLoggers.AboveMaxLevel`. If you want for all messages to go to `ioerr`, set this parameter to `MiniLoggers.BelowMinLevel`.
 * `minlevel` (default: `Info`): messages below this level are ignored. For example with default setting `@debug "foo"` is ignored.
+* `append` (default: `false`): defines whether to append to output stream or to truncate file initially. Used only if `io` or `ioerr` is a file path.
 * `squash_message` (default: `true`): if `squash_message` is set to `true`, then message is squashed to a single line, i.e. all `\\n` are changed to ` ` and `\\r` are removed.
 * `flush` (default: `true`): whether to `flush` IO stream for each log message. Flush behaviour also affected by `flush_threshold` argument.
 * `flush_threshold::Union{Integer, TimePeriod}` (default: 0): if this argument is nonzero and `flush` is `true`, then `io` is flushed only once per `flush_threshold` milliseconds. I.e. if time between two consecutive log messages is less then `flush_threshold`, then second message is not flushed and will have to wait for the next log event.
@@ -46,13 +47,13 @@ Supported keyword arguments include:
 
 Each keyword accepts color information, which should be added after colon inside curly brackets. Colors can be either from `Base.text_colors` or special keyword `func`, in which case is used automated coloring. Additionaly, `bold` modifier is accepted by the `format` argument. For example: `{line:red}`, `{module:cyan:bold}`, `{group:func}` are all valid parts of the format command.
 
-Colour information is applied recursively without override, so `{line {module:cyan} group:red}` is equivalent to `{line:red} {module:cyan} {group:red}`.
+Colour information is applied recursively without override, so `{{line} {module:cyan} {group}:red}` is equivalent to `{line:red} {module:cyan} {group:red}`.
 
 If part of the format is not a recognised keyword, then it is just used as is, for example `{foo:red}` means that output log message contain word "foo" printed in red.
 """
-function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, message_limits = Dict{Any, Int}(), flush = true, format = "{[{datetime}]:func} {message}", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", squash_message = true, flush_threshold = 0)
-    tio = getio(io)
-    tioerr = io == ioerr ? tio : getio(ioerr)
+function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, append = false, message_limits = Dict{Any, Int}(), flush = true, format = "{[{datetime}]:func} {message}", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", squash_message = true, flush_threshold = 0)
+    tio = getio(io, append)
+    tioerr = io == ioerr ? tio : getio(ioerr, append)
     lastflush = Dates.value(Dates.now())
     MiniLogger(tio, tioerr, errlevel, minlevel, message_limits, flush, tokenize(format), dtformat, squash_message, getflushthreshold(flush_threshold), Ref(lastflush))
 end
