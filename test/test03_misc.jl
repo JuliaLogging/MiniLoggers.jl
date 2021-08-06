@@ -53,4 +53,36 @@ Base.write(io::MockIO, a::Vector{UInt8}) = push!(io.recs, MockIORecord(String(co
     @test io.recs[3].buf == "Baz\n"
 end
 
+@testset "file logs" begin
+    fpath = joinpath(@__DIR__, "logtest1.log")
+    logger = MiniLogger(io = fpath, format = "{message}")
+    with_logger(logger) do
+        @info "Foo"
+    end
+    open(fpath, "r") do f
+        @test read(f, String) == "Foo\n"
+    end
+
+    logger = MiniLogger(io = fpath, format = "{message}", append = true)
+    with_logger(logger) do
+        @info "Bar"
+    end
+    open(fpath, "r") do f
+        @test read(f, String) == "Foo\nBar\n"
+    end
+
+    logger = MiniLogger(io = fpath, format = "{message}")
+    with_logger(logger) do
+        @info "Baz"
+    end
+    open(fpath, "r") do f
+        @test read(f, String) == "Baz\n"
+    end
+    try
+        rm(fpath, force = true)
+    catch err
+        @error "" exception = (err, catch_backtrace())
+    end
+end
+
 end # module
