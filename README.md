@@ -39,7 +39,7 @@ But one can make it more colourful and add more details with initilization like 
 
 ```julia
 MiniLogger(minlevel = MiniLoggers.Debug, 
-           format = "{[{datetime}] - {level} - :func}{{module}@{basename}:{line:cyan}:light_green}: {message}") |> global_logger
+           format = "{[{timestamp}] - {level} - :func}{{module}@{basename}:{line:cyan}:light_green}: {message}") |> global_logger
 
 @debug "Values: " x y
 @info "Values: " x y
@@ -55,7 +55,7 @@ Or, we can add small unicode magic and get fancy two-line logging format
 
 ```julia
 MiniLogger(minlevel = MiniLoggers.Debug, 
-           format = "╭{[{datetime}] - {level} - :func}{{module}@{basename}:{line:cyan}:light_green}\n╰→ {message}") |> global_logger
+           format = "╭{[{timestamp}] - {level} - :func}{{module}@{basename}:{line:cyan}:light_green}\n╰→ {message}") |> global_logger
 ```
 
 ![colour3_fmt](images/colour3_fmt.png)
@@ -74,7 +74,7 @@ Also `MiniLoggers.jl` support Julia exceptions, so you can generate error messag
 
 ```julia
 MiniLogger(minlevel = MiniLoggers.Debug, 
-           format = "{[{datetime}] {level}:func} {module}@{basename}:{line:cyan}: {message}") |> global_logger
+           format = "{[{timestamp}] {level}:func} {module}@{basename}:{line:cyan}: {message}") |> global_logger
 
 try
     error("Some error")
