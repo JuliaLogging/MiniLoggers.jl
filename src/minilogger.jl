@@ -1,4 +1,8 @@
-struct MiniLogger{IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat} <: AbstractLogger
+abstract type AbstractMode end
+struct NoTransformations <: AbstractMode end
+struct Squash <: AbstractMode end
+
+struct MiniLogger{AM <: AbstractMode, IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat} <: AbstractLogger
     io::IOT1
     ioerr::IOT2
     errlevel::LogLevel
@@ -7,7 +11,7 @@ struct MiniLogger{IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat} <: AbstractLogger
     flush::Bool
     format::Vector{Token}
     dtformat::DFT
-    squash_message::Bool
+    mode::AM
     flush_threshold::Int
     lastflush::Base.RefValue{Int}
 end
@@ -17,6 +21,16 @@ getio(io::AbstractString, append) = open(io, append ? "a" : "w")
 
 getflushthreshold(x::Integer) = x
 getflushthreshold(x::TimePeriod) = Dates.value(Millisecond(x))
+
+getmode(mode) = mode
+getmode(mode::AbstractString) = getmode(Symbol(mode))
+function getmode(mode::Symbol)
+    if mode == :notransformations
+        return NoTransformations()
+    elseif mode == :squash
+        return Squash()
+    end
+end
 
 function Base.close(logger::MiniLogger)
     if logger.io != stdout && logger.io != stderr && isopen(logger.io)
@@ -40,7 +54,9 @@ Supported keyword arguments include:
 * `errlevel` (default `Error`): determines which output IO to use for log messages. If you want for all messages to go to `io`, set this parameter to `MiniLoggers.AboveMaxLevel`. If you want for all messages to go to `ioerr`, set this parameter to `MiniLoggers.BelowMinLevel`.
 * `minlevel` (default: `Info`): messages below this level are ignored. For example with default setting `@debug "foo"` is ignored.
 * `append` (default: `false`): defines whether to append to output stream or to truncate file initially. Used only if `io` or `ioerr` is a file path.
-* `squash_message` (default: `true`): if `squash_message` is set to `true`, then message is squashed to a single line, i.e. all `\\n` are changed to ` ` and `\\r` are removed.
+* `message_mode` (default: `:squash`): choose how message is transformed before being printed out. Following modes are supported:
+    * `:notransformations`: message printed out as is, without any extra transformations
+    * `:squash`: message is squashed to a single line, i.e. all `\\n` are changed to ` ` and `\\r` are removed.
 * `flush` (default: `true`): whether to `flush` IO stream for each log message. Flush behaviour also affected by `flush_threshold` argument.
 * `flush_threshold::Union{Integer, TimePeriod}` (default: 0): if this argument is nonzero and `flush` is `true`, then `io` is flushed only once per `flush_threshold` milliseconds. I.e. if time between two consecutive log messages is less then `flush_threshold`, then second message is not flushed and will have to wait for the next log event.
 * `dtformat` (default: "yyyy-mm-dd HH:MM:SS"): if `datetime` parameter is used in `format` argument, this dateformat is applied for output timestamps.
@@ -61,11 +77,21 @@ Colour information is applied recursively without override, so `{{line} {module:
 
 If part of the format is not a recognised keyword, then it is just used as is, for example `{foo:red}` means that output log message contain word "foo" printed in red.
 """
-function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, append = false, message_limits = Dict{Any, Int}(), flush = true, format = "[{timestamp:func}] {level:func}: {message}", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", squash_message = true, flush_threshold = 0)
+function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, append = false, message_limits = Dict{Any, Int}(), flush = true, format = "[{timestamp:func}] {level:func}: {message}", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", flush_threshold = 0, message_mode = Squash())
     tio = getio(io, append)
     tioerr = io == ioerr ? tio : getio(ioerr, append)
     lastflush = Dates.value(Dates.now())
-    MiniLogger(tio, tioerr, errlevel, minlevel, message_limits, flush, tokenize(format), dtformat, squash_message, getflushthreshold(flush_threshold), Ref(lastflush))
+    MiniLogger(tio,
+               tioerr, 
+               errlevel, 
+               minlevel, 
+               message_limits, 
+               flush, 
+               tokenize(format), 
+               dtformat, 
+               getmode(message_mode), 
+               getflushthreshold(flush_threshold), 
+               Ref(lastflush))
 end
 
 shouldlog(logger::MiniLogger, level, _module, group, id) =
@@ -84,20 +110,24 @@ end
 showvalue(io, ex::Exception) = Base.showerror(io, ex)
 showvalue(io, ex::AbstractVector{Union{Ptr{Nothing}, Base.InterpreterIP}}) = Base.show_backtrace(io, ex)
 
-function showmessage(io, msg, squash)
-    if squash
-        msglines = split(chomp(string(msg)), '\n')
-        print(io, replace(msglines[1], "\r" => ""))
-        for i in 2:length(msglines)
-            print(io, " ", replace(msglines[i], "\r" => ""))
-        end
-    else
-        print(io, msg)
+# Here we are fighting with multiple dispatch.
+# If message is `Exception` or `Tuple{Exception, Any}` or anything else
+# then we want to ignore third argument.
+# But if it is any other sort of message we want to dispatch result
+# on the type of message transformation
+function _showmessage(io, msg, ::Squash)
+    msglines = split(chomp(string(msg)), '\n')
+    print(io, replace(msglines[1], "\r" => ""))
+    for i in 2:length(msglines)
+        print(io, " ", replace(msglines[i], "\r" => ""))
     end
 end
-showmessage(io, e::Tuple{Exception,Any}, squash) = showvalue(io, e)
-showmessage(io, ex::Exception, squash) = showvalue(io, e)
-showmessage(io, ex::AbstractVector{Union{Ptr{Nothing}, Base.InterpreterIP}}, squash) = Base.show_backtrace(io, ex)
+_showmessage(io, msg, ::NoTransformations) = print(io, msg)
+
+showmessage(io, msg, mode) = _showmessage(io, msg, mode)
+showmessage(io, e::Tuple{Exception,Any}, _) = showvalue(io, e)
+showmessage(io, ex::Exception, _) = showvalue(io, ex)
+showmessage(io, ex::AbstractVector{Union{Ptr{Nothing}, Base.InterpreterIP}}, _) = Base.show_backtrace(io, ex)
 
 tsnow(dtf) = Dates.format(Dates.now(), dtf)
 
@@ -152,7 +182,7 @@ function handle_message(logger::MiniLogger, level, message, _module, group, id,
         if val == "timestamp"
             printwcolor(iob, tsnow(logger.dtformat), c)
         elseif val == "message"
-            showmessage(iob, message, logger.squash_message)
+            showmessage(iob, message, logger.mode)
 
             iscomma = false
             for (key, val) in kwargs

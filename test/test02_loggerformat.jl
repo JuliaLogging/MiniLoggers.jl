@@ -36,7 +36,7 @@ end
         @test s == "foo bar\n"
     end
 
-    logger = MiniLogger(io = io, format = "{message}", squash_message = false)
+    logger = MiniLogger(io = io, format = "{message}", message_mode = :notransformations)
     with_logger(logger) do
         @info "foo\nbar"
 
@@ -92,6 +92,22 @@ end
 
         s = String(take!(io))
         @test conts(s, "^foo exception = ERROR\n *Stacktrace")
+
+        try
+            error("ERROR")
+        catch err
+            @error err
+        end
+        s = String(take!(io))
+        @test s == "ERROR\n"
+
+        try
+            error("ERROR")
+        catch err
+            @error catch_backtrace()
+        end
+        s = String(take!(io))
+        @test conts(s, "^\n *Stacktrace")
     end
 end
 

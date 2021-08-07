@@ -2,6 +2,8 @@ module MiscTest
 
 using ReTest
 using MiniLoggers
+using MiniLoggers: getmode, NoTransformations, Squash
+
 using Dates
 
 @testset "flush" begin
@@ -95,6 +97,13 @@ end
     catch err
         @error "" exception = (err, catch_backtrace())
     end
+end
+
+@testset "modes" begin
+    @test getmode("notransformations") isa NoTransformations
+    @test getmode("squash") isa Squash
+    @test getmode(:notransformations) isa NoTransformations
+    @test getmode(:squash) isa Squash
 end
 
 end # module
