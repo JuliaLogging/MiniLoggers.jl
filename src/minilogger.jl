@@ -19,11 +19,11 @@ getflushthreshold(x::Integer) = x
 getflushthreshold(x::TimePeriod) = Dates.value(Millisecond(x))
 
 function Base.close(logger::MiniLogger)
-    if logger.io != stdout && logger.io != stderr
+    if logger.io != stdout && logger.io != stderr && isopen(logger.io)
         close(logger.io)
     end
 
-    if logger.ioerr != stdout && logger.ioerr != stderr
+    if logger.ioerr != stdout && logger.ioerr != stderr && isopen(logger.ioerr)
         close(logger.ioerr)
     end
 end

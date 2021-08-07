@@ -55,7 +55,8 @@ end
 
 @testset "file logs" begin
     fpath = joinpath(@__DIR__, "logtest1.log")
-    logger = MiniLogger(io = fpath, ioerr = fpath, format = "{message}")
+    fpath2 = joinpath(@__DIR__, "logtest2.log")
+    logger = MiniLogger(io = fpath, ioerr = fpath2, format = "{message}")
     with_logger(logger) do
         @info "Foo"
     end
@@ -63,8 +64,8 @@ end
         @test read(f, String) == "Foo\n"
     end
     close(logger)
-    @test isclosed(logger.io)
-    @test isclosed(logger.ioerr)
+    @test !isopen(logger.io)
+    @test !isopen(logger.ioerr)
 
     logger = MiniLogger(io = fpath, format = "{message}", append = true)
     with_logger(logger) do
@@ -74,8 +75,10 @@ end
         @test read(f, String) == "Foo\nBar\n"
     end
     close(logger)
+    @test !isopen(logger.io)
+    @test isopen(logger.ioerr)
 
-    logger = MiniLogger(io = fpath, format = "{message}")
+    logger = MiniLogger(io = fpath, ioerr = stdout, format = "{message}")
     with_logger(logger) do
         @info "Baz"
     end
@@ -83,8 +86,12 @@ end
         @test read(f, String) == "Baz\n"
     end
     close(logger)
+    @test !isopen(logger.io)
+    @test isopen(logger.ioerr)
+
     try
         rm(fpath, force = true)
+        rm(fpath2, force = true)
     catch err
         @error "" exception = (err, catch_backtrace())
     end
