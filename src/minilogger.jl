@@ -44,8 +44,8 @@ Supported keyword arguments include:
 * `flush` (default: `true`): whether to `flush` IO stream for each log message. Flush behaviour also affected by `flush_threshold` argument.
 * `flush_threshold::Union{Integer, TimePeriod}` (default: 0): if this argument is nonzero and `flush` is `true`, then `io` is flushed only once per `flush_threshold` milliseconds. I.e. if time between two consecutive log messages is less then `flush_threshold`, then second message is not flushed and will have to wait for the next log event.
 * `dtformat` (default: "yyyy-mm-dd HH:MM:SS"): if `datetime` parameter is used in `format` argument, this dateformat is applied for output timestamps.
-* `format` (default: "{[{datetime}]:func} {message}"): format for output log message. It accepts following keywords, which should be provided in curly brackets:
-    * `datetime`: timestamp of the log message
+* `format` (default: "[{timestamp:func}] {level:func}: {message}"): format for output log message. It accepts following keywords, which should be provided in curly brackets:
+    * `timestamp`: timestamp of the log message
     * `level`: name of log level (Debug, Info, etc)
     * `filepath`: filepath of the file, which produced log message
     * `basename`: basename of the filepath of the file, which produced log message
@@ -61,7 +61,7 @@ Colour information is applied recursively without override, so `{{line} {module:
 
 If part of the format is not a recognised keyword, then it is just used as is, for example `{foo:red}` means that output log message contain word "foo" printed in red.
 """
-function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, append = false, message_limits = Dict{Any, Int}(), flush = true, format = "{[{datetime}]:func} {message}", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", squash_message = true, flush_threshold = 0)
+function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, append = false, message_limits = Dict{Any, Int}(), flush = true, format = "[{timestamp:func}] {level:func}: {message}", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", squash_message = true, flush_threshold = 0)
     tio = getio(io, append)
     tioerr = io == ioerr ? tio : getio(ioerr, append)
     lastflush = Dates.value(Dates.now())
@@ -149,7 +149,7 @@ function handle_message(logger::MiniLogger, level, message, _module, group, id,
     for token in logger.format
         c = extractcolor(token, level, _module, group, id, filepath, line)
         val = token.val
-        if val == "datetime"
+        if val == "timestamp"
             printwcolor(iob, tsnow(logger.dtformat), c)
         elseif val == "message"
             showmessage(iob, message, logger.squash_message)
