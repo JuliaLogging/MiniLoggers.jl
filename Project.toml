@@ -1,11 +1,12 @@
 name = "MiniLoggers"
 uuid = "93f3dd0f-005d-4452-894a-a31841fa4078"
 authors = ["Andrey Oskin"]
-version = "0.2.6"
+version = "0.3.0"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
 [compat]
 julia = "1"

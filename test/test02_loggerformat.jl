@@ -8,11 +8,11 @@ conts(s, sub) = match(Regex(sub), s) !== nothing
 @testset "basic format" begin
     io = IOBuffer()
     logger = MiniLogger(io = io, minlevel = MiniLoggers.Debug,
-                        format = "{datetime}:{level}:{module}:{basename}:{filepath}:{line}:{group}:{module}:{id}:{message}")
+                        format = "{timestamp}:{level}:{module}:{basename}:{filepath}:{line}:{group}:{module}:{id}:{message}")
     with_logger(logger) do
         @info "foo"
         s = String(take!(io))
-        @test !conts(s, "datetime")
+        @test !conts(s, "timestamp")
         @test !conts(s, "level")
         @test !conts(s, "module")
         @test !conts(s, "basename")
@@ -36,7 +36,7 @@ end
         @test s == "foo bar\n"
     end
 
-    logger = MiniLogger(io = io, format = "{message}", squash_message = false)
+    logger = MiniLogger(io = io, format = "{message}", message_mode = :notransformations)
     with_logger(logger) do
         @info "foo\nbar"
 
@@ -92,6 +92,22 @@ end
 
         s = String(take!(io))
         @test conts(s, "^foo exception = ERROR\n *Stacktrace")
+
+        try
+            error("ERROR")
+        catch err
+            @error err
+        end
+        s = String(take!(io))
+        @test s == "ERROR\n"
+
+        try
+            error("ERROR")
+        catch err
+            @error catch_backtrace()
+        end
+        s = String(take!(io))
+        @test conts(s, "^\n *Stacktrace")
     end
 end
 
