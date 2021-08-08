@@ -45,6 +45,18 @@ end
     end
 end
 
+@testset "markdown support" begin
+    io = IOBuffer()
+    ioc = IOContext(io, :color => true)
+    logger = MiniLogger(io = ioc, format = "{message}", message_mode = :markdown)
+    with_logger(logger) do
+        @info "**foo**"
+
+        s = String(take!(io))
+        @test s == "  \e[1mfoo\e[22m\n"
+    end
+end
+
 @testset "badcaret" begin
     io = IOBuffer()
     logger = MiniLogger(io = io, format = "{message}")

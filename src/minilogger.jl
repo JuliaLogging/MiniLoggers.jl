@@ -1,6 +1,7 @@
 abstract type AbstractMode end
 struct NoTransformations <: AbstractMode end
 struct Squash <: AbstractMode end
+struct MDown <: AbstractMode end
 
 struct MiniLogger{AM <: AbstractMode, IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat} <: AbstractLogger
     io::IOT1
@@ -29,6 +30,8 @@ function getmode(mode::Symbol)
         return NoTransformations()
     elseif mode == :squash
         return Squash()
+    elseif mode == :markdown
+        return MDown()
     end
 end
 
@@ -57,6 +60,7 @@ Supported keyword arguments include:
 * `message_mode` (default: `:squash`): choose how message is transformed before being printed out. Following modes are supported:
     * `:notransformations`: message printed out as is, without any extra transformations
     * `:squash`: message is squashed to a single line, i.e. all `\\n` are changed to ` ` and `\\r` are removed.
+    * `:markdown`: message is treated as if it is written in markdown
 * `flush` (default: `true`): whether to `flush` IO stream for each log message. Flush behaviour also affected by `flush_threshold` argument.
 * `flush_threshold::Union{Integer, TimePeriod}` (default: 0): if this argument is nonzero and `flush` is `true`, then `io` is flushed only once per `flush_threshold` milliseconds. I.e. if time between two consecutive log messages is less then `flush_threshold`, then second message is not flushed and will have to wait for the next log event.
 * `dtformat` (default: "yyyy-mm-dd HH:MM:SS"): if `datetime` parameter is used in `format` argument, this dateformat is applied for output timestamps.
@@ -122,6 +126,7 @@ function _showmessage(io, msg, ::Squash)
         print(io, " ", replace(msglines[i], "\r" => ""))
     end
 end
+_showmessage(io, msg, ::MDown) = show(io, MIME"text/plain"(), Markdown.parse(msg))
 _showmessage(io, msg, ::NoTransformations) = print(io, msg)
 
 showmessage(io, msg, mode) = _showmessage(io, msg, mode)

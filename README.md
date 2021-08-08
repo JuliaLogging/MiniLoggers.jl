@@ -20,7 +20,7 @@ In it's most simple form, `MiniLoggers.jl` is used as
 ```julia
 using MiniLoggers
 
-MiniLogger(minlevel = MiniLogger.Debug) |> global_logger
+MiniLogger(minlevel = MiniLoggers.Debug) |> global_logger
 
 x = 1
 y = "asd"
@@ -33,7 +33,7 @@ y = "asd"
 
 and produces 
 
-![default_fmt](images/default_fmt.png)
+![default_fmt](images/default_fmt2.png)
 
 But one can make it more colourful and add more details with initilization like the following
 
