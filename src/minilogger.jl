@@ -14,7 +14,7 @@ struct MiniLogger{AM <: AbstractMode, IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat}
     dtformat::DFT
     mode::AM
     flush_threshold::Int
-    lastflush::Base.RefValue{Int}
+    lastflush::Base.RefValue{Int64}
 end
 
 getio(io, append) = io
