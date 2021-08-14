@@ -33,7 +33,7 @@ end
         @info "foo\nbar"
 
         s = String(take!(io))
-        @test s == "foo bar\n"
+        @test s == "foo\tbar\n"
     end
 
     logger = MiniLogger(io = io, format = "{message}", message_mode = :notransformations)
@@ -42,6 +42,26 @@ end
 
         s = String(take!(io))
         @test s == "foo\nbar\n"
+    end
+end
+
+@testset "squashing values" begin
+    io = IOBuffer()
+    logger = MiniLogger(io = io, format = "{message}", squash_delimiter = "XXX")
+    val = "foo\nbar"
+    with_logger(logger) do
+        @info "" x = val
+        s = String(take!(io))
+
+        @test s == "x = fooXXXbar\n"
+    end
+
+    val = "bar\n\rfoo"
+    with_logger(logger) do
+        @info "" x = val
+        s = String(take!(io))
+
+        @test s == "x = barXXXfoo\n"
     end
 end
 
@@ -64,7 +84,7 @@ end
         @info "foo\r\nbar"
         
         s = String(take!(io))
-        @test s == "foo bar\n"
+        @test s == "foo\tbar\n"
     end
 end
 
@@ -78,7 +98,7 @@ end
         @info "values: " x y
     
         s = String(take!(io))
-        @test s == "values: x = 1, y = \"asd\"\n"
+        @test s == "values: x = 1, y = asd\n"
     end
 end
 

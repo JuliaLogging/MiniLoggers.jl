@@ -1,7 +1,7 @@
 name = "MiniLoggers"
 uuid = "93f3dd0f-005d-4452-894a-a31841fa4078"
 authors = ["Andrey Oskin"]
-version = "0.3.2"
+version = "0.4.0"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
