@@ -1,6 +1,7 @@
 abstract type AbstractMode end
 struct NoTransformations <: AbstractMode end
 struct Squash <: AbstractMode end
+struct FullSquash <: AbstractMode end
 struct MDown <: AbstractMode end
 
 struct MiniLogger{AM <: AbstractMode, IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat} <: AbstractLogger
@@ -31,6 +32,8 @@ function getmode(mode::Symbol)
         return NoTransformations()
     elseif mode == :squash
         return Squash()
+    elseif mode == :fullsquash
+        return FullSquash()
     elseif mode == :markdown
         return MDown()
     end
@@ -61,6 +64,7 @@ Supported keyword arguments include:
 * `message_mode` (default: `:squash`): choose how message is transformed before being printed out. Following modes are supported:
     * `:notransformations`: message printed out as is, without any extra transformations
     * `:squash`: message is squashed to a single line, i.e. all `\\n` are changed to `squash_delimiter` and `\\r` are removed.
+    * `:fullsquash`: all messages including error stacktraces are squashed to a single line, i.e. all `\\n` are changed to `squash_delimiter` and `\\r` are removed
     * `:markdown`: message is treated as if it is written in markdown
 * `squash_delimiter`: (default: "\\t"): defines which delimiter to use in squash mode.
 * `flush` (default: `true`): whether to `flush` IO stream for each log message. Flush behaviour also affected by `flush_threshold` argument.
@@ -137,6 +141,44 @@ showmessage(io, msg, logger, mode) = _showmessage(io, msg, logger, mode)
 showmessage(io, e::Tuple{Exception,Any}, logger, mode) = showvalue(io, e, logger, mode)
 showmessage(io, ex::Exception, logger, mode) = showvalue(io, ex, logger, mode)
 showmessage(io, ex::AbstractVector{Union{Ptr{Nothing}, Base.InterpreterIP}}, logger, mode) = Base.show_backtrace(io, ex)
+
+function postprocess(mode, delimiter, iobuf)
+    print(iobuf, "\n")
+    take!(iobuf)
+end
+
+function postprocess(mode::FullSquash, delimiter, iobuf)
+    buf = take!(iobuf)
+    delm = Vector{UInt8}(delimiter)
+    res = similar(buf)
+    L = length(res)
+    j = 1
+    @inbounds for (i, c) in pairs(buf)
+        c == UInt8('\r') && continue
+        if c == UInt8('\n')
+            for c2 in delm
+                if j > L
+                    resize!(res, 2*L)
+                    L *= 2
+                end
+                res[j] = c2
+                j += 1
+            end
+            continue
+        end
+        res[j] = c
+        j += 1
+    end
+    if j > L
+        resize!(res, 2*L)
+        L *= 2
+    end
+    res[j] = UInt8('\n')
+
+    resize!(res, j)
+
+    return res
+end
 
 tsnow(dtf) = Dates.format(Dates.now(), dtf)
 
@@ -224,8 +266,7 @@ function handle_message(logger::MiniLogger, level, message, _module, group, id,
             printwcolor(iob, val, c)
         end
     end
-    print(iob, "\n")
-    write(io, take!(buf))
+    write(io, postprocess(logger.mode, logger.squash_delimiter, buf))
     if logger.flush
         if logger.flush_threshold <= 0
             flush(io)
