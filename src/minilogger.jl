@@ -17,6 +17,7 @@ struct MiniLogger{AM <: AbstractMode, IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat}
     squash_delimiter::String
     flush_threshold::Int
     lastflush::Base.RefValue{Int64}
+    lock::ReentrantLock # thread-safety of message_limits Dict
 end
 
 getio(io, append) = io
@@ -76,7 +77,7 @@ Supported keyword arguments include:
     * `filepath`: filepath of the file, which produced log message
     * `basename`: basename of the filepath of the file, which produced log message
     * `line`: line number of the log command in the file, which produced log message
-    * `group`: log group 
+    * `group`: log group
     * `module`: name of the module, which contains log command
     * `id`: log message id
     * `message`: message itself
@@ -92,21 +93,23 @@ function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = 
     tioerr = io == ioerr ? tio : getio(ioerr, append)
     lastflush = Dates.value(Dates.now())
     MiniLogger(tio,
-               tioerr, 
-               errlevel, 
-               minlevel, 
-               message_limits, 
-               flush, 
-               tokenize(format), 
-               dtformat, 
-               getmode(message_mode), 
+               tioerr,
+               errlevel,
+               minlevel,
+               message_limits,
+               flush,
+               tokenize(format),
+               dtformat,
+               getmode(message_mode),
                squash_delimiter,
-               getflushthreshold(flush_threshold), 
-               Ref(lastflush))
+               getflushthreshold(flush_threshold),
+               Ref(lastflush),
+               ReentrantLock())
 end
 
-shouldlog(logger::MiniLogger, level, _module, group, id) =
+shouldlog(logger::MiniLogger, level, _module, group, id) = lock(logger.lock) do
     get(logger.message_limits, id, 1) > 0
+end
 
 min_enabled_level(logger::MiniLogger) = logger.minlevel
 
@@ -213,9 +216,10 @@ end
 function handle_message(logger::MiniLogger, level, message, _module, group, id,
                         filepath, line; maxlog=nothing, kwargs...)
     if maxlog !== nothing && maxlog isa Integer
-        remaining = get!(logger.message_limits, id, maxlog)
-        logger.message_limits[id] = remaining - 1
-        remaining > 0 || return
+        remaining = lock(logger.lock) do
+            logger.message_limits[id] = max(get(logger.message_limits, id, maxlog), 0) - 1
+        end
+        remaining ≥ 0 || return
     end
 
     io = if level < logger.errlevel
