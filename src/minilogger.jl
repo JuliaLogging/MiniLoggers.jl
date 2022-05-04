@@ -238,6 +238,9 @@ function handle_message(logger::MiniLogger, level, message, _module, group, id,
             printwcolor(iob, tsnow(logger.dtformat), c)
         elseif val == "message"
             showmessage(iob, message, logger, logger.mode)
+            if length(kwargs) > 0 && !isempty(message)
+                print(iob, " ")
+            end
 
             iscomma = false
             for (key, val) in kwargs

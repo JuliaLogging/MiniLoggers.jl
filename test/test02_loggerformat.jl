@@ -26,6 +26,29 @@ conts(s, sub) = match(Regex(sub), s) !== nothing
     end
 end
 
+@testset "contracting kwarg values" begin
+    io = IOBuffer()
+    logger = MiniLogger(io = io, format = "{message}")
+    with_logger(logger) do
+        @info "hello" x = 4 y = 2
+        s = String(take!(io))
+        @test s == "hello x = 4, y = 2\n"
+
+        @info "hello"
+        s = String(take!(io))
+        @test s == "hello\n"
+
+        # Due to the way message is generated, it is impossible to make it more natural
+        @info x = 4 y = 2
+        s = String(take!(io))
+        @test s == "4 y = 2\n"
+
+        @info "hello" x = 4 " and " y = 2
+        s = String(take!(io))
+        @test s == "hello x = 4 and y = 2\n"
+    end
+end
+
 @testset "squashing" begin
     io = IOBuffer()
     logger = MiniLogger(io = io, format = "{message}")
@@ -95,7 +118,7 @@ end
     y = "asd"
 
     with_logger(logger) do
-        @info "values: " x y
+        @info "values:" x y
     
         s = String(take!(io))
         @test s == "values: x = 1, y = asd\n"
@@ -119,7 +142,7 @@ end
         try
             error("ERROR")
         catch err
-            @error "foo " exception = (err, catch_backtrace())
+            @error "foo" exception = (err, catch_backtrace())
         end
 
         s = String(take!(io))
