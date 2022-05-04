@@ -43,6 +43,10 @@ end
         s = String(take!(io))
         @test s == "4 y = 2\n"
 
+        @info "" x = 4 y = 2
+        s = String(take!(io))
+        @test s == "x = 4, y = 2\n"
+
         @info "hello" x = 4 " and " y = 2
         s = String(take!(io))
         @test s == "hello x = 4 and y = 2\n"
