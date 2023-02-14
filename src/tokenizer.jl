@@ -1,4 +1,9 @@
 ########################################
+# Tokenizer type
+########################################
+abstract type AbstractTokenizer end
+
+########################################
 # Color utils
 ########################################
 struct Color
@@ -67,6 +72,8 @@ end
 ########################################
 # tokenizer and auxilary functions
 ########################################
+struct GenericTokenizer <: AbstractTokenizer end
+
 function addtoken!(out, s, i0, i1)
     i0 > i1 && return
     i0 > ncodeunits(s) && return
@@ -90,7 +97,7 @@ function recolor!(out, s, i0, i1, tind)
     return
 end
 
-function tokenize!(out, s, level = 1, i0 = 1)
+function tokenize!(t::GenericTokenizer, out, s, level = 1, i0 = 1)
     i00 = i0
     i = i0
     i1 = prevind(s, i0)
@@ -99,7 +106,7 @@ function tokenize!(out, s, level = 1, i0 = 1)
         c = s[i]
         if c == '{'
             addtoken!(out, s, i0, i1)
-            i = tokenize!(out, s, level + 1, nextind(s, i))
+            i = tokenize!(t, out, s, level + 1, nextind(s, i))
             i1 = prevind(s, i)
             i0 = i
             continue
@@ -117,10 +124,97 @@ function tokenize!(out, s, level = 1, i0 = 1)
     return i
 end
 
-tokenize(v::Vector{Token}) = v
-function tokenize(s)
+tokenize(v::Vector{Token}) = tokenize(GenericTokenizer(), v)
+tokenize(::AbstractTokenizer, v::Vector{Token}) = v
+tokenize(s) = tokenize(GenericTokenizer(), s)
+function tokenize(tokenizer::AbstractTokenizer, s)
     out = Token[]
-    tokenize!(out, s)
+    tokenize!(tokenizer, out, s)
 
     return out
+end
+
+########################################
+# Tokenizer for JsonLogger
+########################################
+
+struct JsonLoggerTokenizer <: AbstractTokenizer end
+
+function addtoken!(t::JsonLoggerTokenizer, out, s, i0, i1, quoted = false)
+    if quoted
+        addtoken!(t, out, "\"" * s[i0:i1] * "\"")
+    else
+        addtoken!(t, out, s[i0:i1])
+    end
+end
+
+function addtoken!(t::JsonLoggerTokenizer, out, s)
+    push!(out, Token(s, Color()))
+end
+
+function tokenize!(t::JsonLoggerTokenizer, out, s, level = 1, i0 = 1)
+    addtoken!(t, out, "{")
+
+    i00 = i0
+    i = i0
+    i1 = prevind(s, i0)
+    tind = length(out) + 1
+    duplicate = true
+    while i <= ncodeunits(s)
+        c = s[i]
+        if c == '{'
+            i = tokenize!(t, out, s, level + 1, nextind(s, i))
+            i0 = i
+            i1 = i
+            duplicate = true
+            continue
+        elseif c == '}'
+            level == 1 && error("Unexpected } at position $i")
+            if i0 <= i1
+                if duplicate
+                    addtoken!(t, out, s, i0, i1, true)
+                    addtoken!(t, out, ":")
+                    addtoken!(t, out, s, i0, i1, false)
+                else
+                    addtoken!(t, out, s, i0, i1, false)
+                end
+            end
+            addtoken!(t, out, "}")
+            return nextind(s, i)
+        elseif c == ','
+            if i0 < i
+                if duplicate
+                    addtoken!(t, out, s, i0, i1, true)
+                    addtoken!(t, out, ":")
+                    addtoken!(t, out, s, i0, i1, false)
+                else
+                    addtoken!(t, out, s, i0, i1, false)
+                end
+            end
+            addtoken!(t, out, ",")
+            i0 = nextind(s, i)
+            duplicate = true
+        elseif c == ':'
+            duplicate = false
+            addtoken!(t, out, s, i0, i1, true)
+            addtoken!(t, out, ":")
+            i0 = nextind(s, i)
+        end
+        i1 = i
+        i = nextind(s, i)
+    end
+    level == 1 || error("Unbalanced { at position $i00")
+    if i0 <= ncodeunits(s)
+        if duplicate
+            addtoken!(t, out, s, i0, i1, true)
+            addtoken!(t, out, ":")
+            addtoken!(t, out, s, i0, i1, false)
+        else
+            addtoken!(t, out, s, i0, i1, false)
+        end
+    end
+
+    addtoken!(t, out, "}")
+
+    return i
 end

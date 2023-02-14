@@ -1,4 +1,4 @@
-struct MiniLogger{AM <: AbstractMode, IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat} <: AbstractMiniLogger
+struct JsonLogger{AM <: AbstractMode, IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat} <: AbstractMiniLogger
     io::IOT1
     ioerr::IOT2
     errlevel::LogLevel
@@ -14,25 +14,10 @@ struct MiniLogger{AM <: AbstractMode, IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat}
     lock::ReentrantLock # thread-safety of message_limits Dict
 end
 
-getmode(mode) = mode
-getmode(mode::AbstractString) = getmode(Symbol(mode))
-function getmode(mode::Symbol)
-    if mode == :notransformations
-        return NoTransformations()
-    elseif mode == :squash
-        return Squash()
-    elseif mode == :fullsquash
-        return FullSquash()
-    elseif mode == :markdown
-        return MDown()
-    end
-end
-
 """
-    MiniLogger(; <keyword arguments>)
+    JsonLogger(; <keyword arguments>)
 
-MiniLogger constructor creates custom logger which can be used with usual `@info`, `@debug` commands.
-
+JsonLogger constructor creates custom logger with json output, which can be used with usual `@info`, `@debug` commands.
 Supported keyword arguments include:
 
 * `io` (default `stdout`): IO stream which is used to output log messages below `errlevel` level. Can be either `IO` or `String`, in the latter case it is treated as a name of the output file.
@@ -40,16 +25,11 @@ Supported keyword arguments include:
 * `errlevel` (default `Error`): determines which output IO to use for log messages. If you want for all messages to go to `io`, set this parameter to `MiniLoggers.AboveMaxLevel`. If you want for all messages to go to `ioerr`, set this parameter to `MiniLoggers.BelowMinLevel`.
 * `minlevel` (default: `Info`): messages below this level are ignored. For example with default setting `@debug "foo"` is ignored.
 * `append` (default: `false`): defines whether to append to output stream or to truncate file initially. Used only if `io` or `ioerr` is a file path.
-* `message_mode` (default: `:squash`): choose how message is transformed before being printed out. Following modes are supported:
-    * `:notransformations`: message printed out as is, without any extra transformations
-    * `:squash`: message is squashed to a single line, i.e. all `\\n` are changed to `squash_delimiter` and `\\r` are removed.
-    * `:fullsquash`: all messages including error stacktraces are squashed to a single line, i.e. all `\\n` are changed to `squash_delimiter` and `\\r` are removed
-    * `:markdown`: message is treated as if it is written in markdown
-* `squash_delimiter`: (default: "\\t"): defines which delimiter to use in squash mode.
 * `flush` (default: `true`): whether to `flush` IO stream for each log message. Flush behaviour also affected by `flush_threshold` argument.
+* `squash_delimiter`: (default: "\\t"): defines which delimiter to use when squashing multilines messages.
 * `flush_threshold::Union{Integer, TimePeriod}` (default: 0): if this argument is nonzero and `flush` is `true`, then `io` is flushed only once per `flush_threshold` milliseconds. I.e. if time between two consecutive log messages is less then `flush_threshold`, then second message is not flushed and will have to wait for the next log event.
 * `dtformat` (default: "yyyy-mm-dd HH:MM:SS"): if `datetime` parameter is used in `format` argument, this dateformat is applied for output timestamps.
-* `format` (default: "[{timestamp:func}] {level:func}: {message}"): format for output log message. It accepts following keywords, which should be provided in curly brackets:
+* `format`: defines which keywords should be used in the output. If defined, should be a string which defines the structure of the output json. It should use keywords, and allowed keywords are:
     * `timestamp`: timestamp of the log message
     * `level`: name of log level (Debug, Info, etc)
     * `filepath`: filepath of the file, which produced log message
@@ -60,61 +40,30 @@ Supported keyword arguments include:
     * `id`: log message id
     * `message`: message itself
 
-Each keyword accepts color information, which should be added after colon inside curly brackets. Colors can be either from `Base.text_colors` or special keyword `func`, in which case is used automated coloring. Additionaly, `bold` modifier is accepted by the `format` argument. For example: `{line:red}`, `{module:cyan:bold}`, `{group:func}` are all valid parts of the format command.
+Format string should consists of comma separated tokens. In it's simplest form, tokens can be just keywords, then names of the keywords are used as a fieldnames. So, for example `"timestamp,level,message"` result in `{"timestamp":"2023-01-01 12:34:56","level":"Debug","message":"some logging message"}`. If fields must be renamed, then one should use `<field name>:<keyword>` form. For example, `"severity:level"` result in `{"severity":"Debug"}`, here field name is `severity` and the value is taken from the logging `level`. One can also create nested json, in order to do it one should use `<field name>:{<format string>}` form, where previous rules for format string also applies. For example, `source:{line, file:basename}` result in `{"source":{"line":123,"file":"calculations.jl"}}`
 
-Colour information is applied recursively without override, so `{{line} {module:cyan} {group}:red}` is equivalent to `{line:red} {module:cyan} {group:red}`.
-
-If part of the format is not a recognised keyword, then it is just used as is, for example `{foo:red}` means that output log message contain word "foo" printed in red.
+By default, `format` is `timestamp,level,basename,line,message`.
 """
-function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, append = false, message_limits = Dict{Any, Int}(), flush = true, format = "[{timestamp:func}] {level:func}: {message}", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", flush_threshold = 0, message_mode = Squash(), squash_delimiter = "\t")
+function JsonLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, append = false, message_limits = Dict{Any, Int}(), flush = true, format = "timestamp,level,basename,line,message", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", flush_threshold = 0, squash_delimiter = "\t")
     tio = getio(io, append)
     tioerr = io == ioerr ? tio : getio(ioerr, append)
     lastflush = Dates.value(Dates.now())
-    MiniLogger(tio,
+    JsonLogger(tio,
                tioerr,
                errlevel,
                minlevel,
                message_limits,
                flush,
-               tokenize(format),
+               tokenize(JsonLoggerTokenizer(), format),
                dtformat,
-               getmode(message_mode),
+               JsonSquash(),
                squash_delimiter,
                getflushthreshold(flush_threshold),
                Ref(lastflush),
                ReentrantLock())
 end
 
-
-function colorfunc(level::LogLevel, _module, group, id, filepath, line, element)
-    level < Info  ? Color(Base.debug_color()) :
-    level < Warn  ? Color(Base.info_color())  :
-    level < Error ? Color(Base.warn_color())  :
-                    Color(Base.error_color())
-end
-
-function extractcolor(token::Token, level, _module, group, id, filepath, line)
-    if token.c.c == :func
-        color = colorfunc(level, _module, group, id, filepath, line, token.val)
-        return Color(color.c, color.isbold || token.c.isbold)
-    else
-        return token.c
-    end
-end
-
-function printwcolor(iob, val, color)
-    if color.c == -1
-        if color.isbold
-            printstyled(iob, val; bold = color.isbold)
-        else
-            print(iob, val)
-        end
-    else
-        printstyled(iob, val; color = color.c, bold = color.isbold)
-    end
-end
-
-function handle_message(logger::MiniLogger, level, message, _module, group, id,
+function handle_message(logger::JsonLogger, level, message, _module, group, id,
                         filepath, line; maxlog=nothing, kwargs...)
     if maxlog !== nothing && maxlog isa Integer
         remaining = lock(logger.lock) do
@@ -132,12 +81,27 @@ function handle_message(logger::MiniLogger, level, message, _module, group, id,
     buf = IOBuffer()
     iob = IOContext(buf, io)
 
+    isfirst = true
     for token in logger.format
-        c = extractcolor(token, level, _module, group, id, filepath, line)
         val = token.val
         if val == "timestamp"
-            printwcolor(iob, tsnow(logger.dtformat), c)
+            print(iob, "\"", tsnow(logger.dtformat), "\"")
+        elseif val == "level"
+            print(iob, "\"", string(level), "\"")
+        elseif val == "filepath"
+            print(iob, "\"", filepath, "\"")
+        elseif val == "basename"
+            print(iob, "\"", basename(filepath), "\"")
+        elseif val == "line"
+            print(iob, line)
+        elseif val == "group"
+            print(iob, "\"", group, "\"")
+        elseif val == "module"
+            print(iob, "\"", _module, "\"")
+        elseif val == "id"
+            print(iob, "\"", id, "\"")
         elseif val == "message"
+            print(iob, "\"")
             showmessage(iob, message, logger, logger.mode)
             if length(kwargs) > 0 && !isempty(message)
                 print(iob, " ")
@@ -155,26 +119,13 @@ function handle_message(logger::MiniLogger, level, message, _module, group, id,
                     iscomma = true
                 end
             end
-        elseif val == "level"
-            levelstr = string(level)
-            printwcolor(iob, levelstr, c)
-        elseif val == "basename"
-            printwcolor(iob, basename(filepath), c)
-        elseif val == "filepath"
-            printwcolor(iob, filepath, c)
-        elseif val == "line"
-            printwcolor(iob, line, c)
-        elseif val == "group"
-            printwcolor(iob, group, c)
-        elseif val == "module"
-            printwcolor(iob, _module, c)
-        elseif val == "id"
-            printwcolor(iob, id, c)
+            print(iob, "\"")
         else
-            printwcolor(iob, val, c)
+            print(iob, val)
         end
     end
     write(io, postprocess(logger.mode, logger.squash_delimiter, buf))
+
     if logger.flush
         if logger.flush_threshold <= 0
             flush(io)
