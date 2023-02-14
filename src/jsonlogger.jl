@@ -14,20 +14,6 @@ struct JsonLogger{AM <: AbstractMode, IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat}
     lock::ReentrantLock # thread-safety of message_limits Dict
 end
 
-prepkws(format) = map(v -> Token(v, Color()), ["{\"time\":",
-                                               "timestamp",
-                                               ",\"severity\":",
-                                               "level",
-                                               ",\"logging.googleapis.com/sourceLocation\":{\"file\":",
-                                               "basename",
-                                               ",\"line\":",
-                                               "line",
-                                               "}",
-                                               ",\"message\":",
-                                               "message",
-                                               "}"])
-
-
 """
     JsonLogger(; <keyword arguments>)
 
@@ -43,7 +29,7 @@ Supported keyword arguments include:
 * `squash_delimiter`: (default: "\\t"): defines which delimiter to use when squashing multilines messages.
 * `flush_threshold::Union{Integer, TimePeriod}` (default: 0): if this argument is nonzero and `flush` is `true`, then `io` is flushed only once per `flush_threshold` milliseconds. I.e. if time between two consecutive log messages is less then `flush_threshold`, then second message is not flushed and will have to wait for the next log event.
 * `dtformat` (default: "yyyy-mm-dd HH:MM:SS"): if `datetime` parameter is used in `format` argument, this dateformat is applied for output timestamps.
-* `format` (default `nothing`): defines which keywords should be used in the output. If defined, should be `Vector` of keywords, or pairs `"keyword" => "field name"`. Allowed keywords:
+* `format`: defines which keywords should be used in the output. If defined, should be a string which defines the structure of the output json. It should use keywords, and allowed keywords are:
     * `timestamp`: timestamp of the log message
     * `level`: name of log level (Debug, Info, etc)
     * `filepath`: filepath of the file, which produced log message
@@ -54,9 +40,11 @@ Supported keyword arguments include:
     * `id`: log message id
     * `message`: message itself
 
-By default, `format` will use `timestamp`, `level`, `basename`, `line` and `message` keywords.
+Format string should consists of comma separated tokens. In it's simplest form, tokens can be just keywords, then names of the keywords are used as a fieldnames. So, for example `"timestamp,level,message"` result in `{"timestamp":"2023-01-01 12:34:56","level":"Debug","message":"some logging message"}`. If fields must be renamed, then one should use `<field name>:<keyword>` form. For example, `"severity:level"` result in `{"severity":"Debug"}`, here field name is `severity` and the value is taken from the logging `level`. One can also create nested json, in order to do it one should use `<field name>:{<format string>}` form, where previous rules for format string also applies. For example, `source:{line, file:basename}` result in `{"source":{"line":123,"file":"calculations.jl"}}`
+
+By default, `format` is `timestamp,level,basename,line,message`.
 """
-function JsonLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, append = false, message_limits = Dict{Any, Int}(), flush = true, format = nothing, dtformat = dateformat"yyyy-mm-dd HH:MM:SS", flush_threshold = 0, squash_delimiter = "\t")
+function JsonLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, append = false, message_limits = Dict{Any, Int}(), flush = true, format = "timestamp,level,basename,line,message", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", flush_threshold = 0, squash_delimiter = "\t")
     tio = getio(io, append)
     tioerr = io == ioerr ? tio : getio(ioerr, append)
     lastflush = Dates.value(Dates.now())
@@ -66,7 +54,7 @@ function JsonLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = 
                minlevel,
                message_limits,
                flush,
-               prepkws(format),
+               tokenize(JsonLoggerTokenizer(), format),
                dtformat,
                JsonSquash(),
                squash_delimiter,
