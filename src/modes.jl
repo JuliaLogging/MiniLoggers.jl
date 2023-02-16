@@ -13,13 +13,13 @@ function squash(msg, logger, mode::Union{Squash, FullSquash})
     smsg = replace(smsg, "\n" => logger.squash_delimiter)
 end
 
-function squash(msg, logger, mode::JsonSquash)
-    smsg = string(msg)
-    # Far from perfect, but should cover most cases. If we run into any issues, we can add more complicated processing
-    smsg = replace(smsg, "\"" => "\\\"")
-    smsg = replace(smsg, "\r" => "")
-    smsg = replace(smsg, "\n" => logger.squash_delimiter)
-end
+# function squash(msg, logger, mode::JsonSquash)
+#     smsg = string(msg)
+#     # Far from perfect, but should cover most cases. If we run into any issues, we can add more complicated processing
+#     smsg = replace(smsg, "\"" => "\\\"")
+#     smsg = replace(smsg, "\r" => "")
+#     smsg = replace(smsg, "\n" => logger.squash_delimiter)
+# end
 
 showvalue(io, msg, logger, mode) = print(io, squash(msg, logger, mode))
 
@@ -48,7 +48,7 @@ function postprocess(mode, delimiter, iobuf)
     take!(iobuf)
 end
 
-function postprocess(mode::Union{FullSquash, JsonSquash}, delimiter, iobuf)
+function postprocess(mode::FullSquash, delimiter, iobuf)
     buf = take!(iobuf)
     delm = Vector{UInt8}(delimiter)
     res = similar(buf)
@@ -79,4 +79,26 @@ function postprocess(mode::Union{FullSquash, JsonSquash}, delimiter, iobuf)
     resize!(res, j)
 
     return res
+end
+
+function postprocess(mode::JsonSquash, delimiter, iobuf)
+    buf0 = String(take!(iobuf))
+    buf = IOBuffer()
+    iob = IOContext(buf)
+    @inbounds for c in buf0
+        c == '\r' && continue
+        if c == '\n' 
+            print(iob, delimiter)
+        elseif c == '\\'
+            print(iob, '\\')
+            print(iob, '\\')
+        elseif c == '\"'
+            print(iob, '\\')
+            print(iob, '\"')
+        else
+            print(iob, c)
+        end
+    end
+
+    return take!(buf)
 end
