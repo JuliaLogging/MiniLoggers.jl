@@ -101,30 +101,36 @@ function handle_message(logger::JsonLogger, level, message, _module, group, id,
         elseif val == "id"
             print(iob, "\"", id, "\"")
         elseif val == "message"
-            print(iob, "\"")
-            showmessage(iob, message, logger, logger.mode)
+            mbuf = IOBuffer()
+            miob = IOContext(mbuf, io)
+
+            showmessage(miob, message, logger, logger.mode)
             if length(kwargs) > 0 && !isempty(message)
-                print(iob, " ")
+                print(miob, " ")
             end
 
             iscomma = false
             for (k, v) in kwargs
                 if string(k) == v
-                    print(iob, k)
+                    print(miob, k)
                     iscomma = false
                 else
-                    iscomma && print(iob, ", ")
-                    print(iob, k, " = ")
-                    showvalue(iob, v, logger, logger.mode)
+                    iscomma && print(miob, ", ")
+                    print(miob, k, " = ")
+                    showvalue(miob, v, logger, logger.mode)
                     iscomma = true
                 end
             end
+            print(iob, "\"")
+            write(iob, postprocess(JsonSquash(), logger.squash_delimiter, mbuf))
             print(iob, "\"")
         else
             print(iob, val)
         end
     end
-    write(io, postprocess(logger.mode, logger.squash_delimiter, buf))
+    write(io, take!(buf))
+    write(io, '\n')
+    # write(io, postprocess(logger.mode, logger.squash_delimiter, buf))
 
     if logger.flush
         if logger.flush_threshold <= 0
