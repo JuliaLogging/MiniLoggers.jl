@@ -128,9 +128,8 @@ function handle_message(logger::JsonLogger, level, message, _module, group, id,
             print(iob, val)
         end
     end
+    print(iob, '\n')
     write(io, take!(buf))
-    write(io, '\n')
-    # write(io, postprocess(logger.mode, logger.squash_delimiter, buf))
 
     if logger.flush
         if logger.flush_threshold <= 0
