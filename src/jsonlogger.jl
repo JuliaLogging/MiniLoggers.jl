@@ -1,4 +1,4 @@
-struct JsonLogger{AM <: AbstractMode, IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat} <: AbstractMiniLogger
+struct JsonLogger{AM <: AbstractMode, IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat, F} <: AbstractMiniLogger
     io::IOT1
     ioerr::IOT2
     errlevel::LogLevel
@@ -12,6 +12,7 @@ struct JsonLogger{AM <: AbstractMode, IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat}
     flush_threshold::Int
     lastflush::Base.RefValue{Int64}
     lock::ReentrantLock # thread-safety of message_limits Dict
+    levelname::F
 end
 
 """
@@ -29,6 +30,7 @@ Supported keyword arguments include:
 * `squash_delimiter`: (default: "\\t"): defines which delimiter to use when squashing multilines messages.
 * `flush_threshold::Union{Integer, TimePeriod}` (default: 0): if this argument is nonzero and `flush` is `true`, then `io` is flushed only once per `flush_threshold` milliseconds. I.e. if time between two consecutive log messages is less then `flush_threshold`, then second message is not flushed and will have to wait for the next log event.
 * `dtformat` (default: "yyyy-mm-dd HH:MM:SS"): if `datetime` parameter is used in `format` argument, this dateformat is applied for output timestamps.
+* `levelname` (default `string`): allows to redefine output of log level names. Should be function of the form `levelname(level::LogLevel)::String`
 * `format`: defines which keywords should be used in the output. If defined, should be a string which defines the structure of the output json. It should use keywords, and allowed keywords are:
     * `timestamp`: timestamp of the log message
     * `level`: name of log level (Debug, Info, etc)
@@ -44,7 +46,7 @@ Format string should consists of comma separated tokens. In it's simplest form, 
 
 By default, `format` is `timestamp,level,basename,line,message`.
 """
-function JsonLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, append = false, message_limits = Dict{Any, Int}(), flush = true, format = "timestamp,level,basename,line,message", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", flush_threshold = 0, squash_delimiter = "\t")
+function JsonLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, append = false, message_limits = Dict{Any, Int}(), flush = true, format = "timestamp,level,basename,line,message", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", flush_threshold = 0, squash_delimiter = "\t", levelname = string)
     tio = getio(io, append)
     tioerr = io == ioerr ? tio : getio(ioerr, append)
     lastflush = Dates.value(Dates.now())
@@ -60,7 +62,8 @@ function JsonLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = 
                squash_delimiter,
                getflushthreshold(flush_threshold),
                Ref(lastflush),
-               ReentrantLock())
+               ReentrantLock(),
+               levelname)
 end
 
 function handle_message(logger::JsonLogger, level, message, _module, group, id,
@@ -87,7 +90,7 @@ function handle_message(logger::JsonLogger, level, message, _module, group, id,
         if val == "timestamp"
             print(iob, "\"", tsnow(logger.dtformat), "\"")
         elseif val == "level"
-            print(iob, "\"", string(level), "\"")
+            print(iob, "\"", logger.levelname(level), "\"")
         elseif val == "filepath"
             print(iob, "\"", filepath, "\"")
         elseif val == "basename"
