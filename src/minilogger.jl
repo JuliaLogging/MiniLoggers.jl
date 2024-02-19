@@ -1,4 +1,4 @@
-struct MiniLogger{AM <: AbstractMode, IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat} <: AbstractMiniLogger
+struct MiniLogger{AM <: AbstractMode, IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat, F} <: AbstractMiniLogger
     io::IOT1
     ioerr::IOT2
     errlevel::LogLevel
@@ -12,6 +12,7 @@ struct MiniLogger{AM <: AbstractMode, IOT1 <: IO, IOT2 <: IO, DFT <: DateFormat}
     flush_threshold::Int
     lastflush::Base.RefValue{Int64}
     lock::ReentrantLock # thread-safety of message_limits Dict
+    levelname::F
 end
 
 getmode(mode) = mode
@@ -49,6 +50,7 @@ Supported keyword arguments include:
 * `flush` (default: `true`): whether to `flush` IO stream for each log message. Flush behaviour also affected by `flush_threshold` argument.
 * `flush_threshold::Union{Integer, TimePeriod}` (default: 0): if this argument is nonzero and `flush` is `true`, then `io` is flushed only once per `flush_threshold` milliseconds. I.e. if time between two consecutive log messages is less then `flush_threshold`, then second message is not flushed and will have to wait for the next log event.
 * `dtformat` (default: "yyyy-mm-dd HH:MM:SS"): if `datetime` parameter is used in `format` argument, this dateformat is applied for output timestamps.
+* `levelname` (default `string`): allows to redefine output of log level names. Should be function of the form `levelname(level::LogLevel)::String`
 * `format` (default: "[{timestamp:func}] {level:func}: {message}"): format for output log message. It accepts following keywords, which should be provided in curly brackets:
     * `timestamp`: timestamp of the log message
     * `level`: name of log level (Debug, Info, etc)
@@ -66,7 +68,7 @@ Colour information is applied recursively without override, so `{{line} {module:
 
 If part of the format is not a recognised keyword, then it is just used as is, for example `{foo:red}` means that output log message contain word "foo" printed in red.
 """
-function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, append = false, message_limits = Dict{Any, Int}(), flush = true, format = "[{timestamp:func}] {level:func}: {message}", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", flush_threshold = 0, message_mode = Squash(), squash_delimiter = "\t")
+function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = Info, append = false, message_limits = Dict{Any, Int}(), flush = true, format = "[{timestamp:func}] {level:func}: {message}", dtformat = dateformat"yyyy-mm-dd HH:MM:SS", flush_threshold = 0, message_mode = Squash(), squash_delimiter = "\t", levelname = string)
     tio = getio(io, append)
     tioerr = io == ioerr ? tio : getio(ioerr, append)
     lastflush = Dates.value(Dates.now())
@@ -82,7 +84,8 @@ function MiniLogger(; io = stdout, ioerr = stderr, errlevel = Error, minlevel = 
                squash_delimiter,
                getflushthreshold(flush_threshold),
                Ref(lastflush),
-               ReentrantLock())
+               ReentrantLock(),
+               levelname)
 end
 
 
@@ -156,7 +159,7 @@ function handle_message(logger::MiniLogger, level, message, _module, group, id,
                 end
             end
         elseif val == "level"
-            levelstr = string(level)
+            levelstr = logger.levelname(level)
             printwcolor(iob, levelstr, c)
         elseif val == "basename"
             printwcolor(iob, basename(filepath), c)
